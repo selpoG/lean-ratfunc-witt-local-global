@@ -4,7 +4,7 @@ title: "Witt's Local-Global Principle over Rational Function Fields in Lean"
 authors:
   - name: "selpo"
 version: 0.1.0
-date-released: 2026-08-11
+date-released: 2026-09-06
 repository-code: "https://github.com/selpoG/lean-ratfunc-witt-local-global"
 license: "Apache-2.0"
 keywords:

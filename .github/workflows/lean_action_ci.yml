@@ -22,3 +22,25 @@ jobs:
         run: lake exe lint-style RatFuncWittLocalGlobal
       - name: Public axiom audit
         run: lake env lean scripts/AxiomAudit.lean
+      - name: Install Task
+        uses: go-task/setup-task@v2
+        with:
+          version: '3.53.1'
+      - name: Audit duplicate declarations
+        run: task duplicate-declaration-audit
+
+  pdf:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Task
+        uses: go-task/setup-task@v2
+        with:
+          version: '3.53.1'
+      - name: Install TeX dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            texlive-lang-japanese texlive-latex-extra texlive-fonts-recommended ripgrep
+      - name: Build English and Japanese proof PDFs
+        run: task pdf
