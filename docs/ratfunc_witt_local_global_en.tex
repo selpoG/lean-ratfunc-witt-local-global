@@ -1,0 +1,818 @@
+\documentclass[uplatex,dvipdfmx]{jsarticle}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{enumitem}
+\usepackage{seqsplit}
+\usepackage[
+  dvipdfmx,
+  unicode,
+  bookmarks=true,
+  bookmarksnumbered=true,
+  bookmarksopen=true,
+  bookmarksdepth=2
+]{hyperref}
+\usepackage{bookmark}
+\hypersetup{
+  hidelinks,
+  pdftitle={A Witt Local--Global Principle over a Rational Function Field},
+  pdfauthor={selpo},
+  pdfsubject={Complete mathematical proof corresponding to the Lean formalization}
+}
+
+\newcommand{\RF}{R(X)}
+\newcommand{\RatFunc}{\operatorname{RatFunc}}
+\newcommand{\ord}{\operatorname{ord}}
+\newcommand{\sgn}{\operatorname{sgn}}
+\newcommand{\lean}[1]{\texttt{\expandafter\seqsplit\expandafter{\detokenize{#1}}}}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+\renewcommand{\abstractname}{Abstract}
+
+\title{A Witt Local--Global Principle over a Rational Function Field}
+\author{selpo}
+\date{}
+
+\begin{document}
+\pdfbookmark[0]{A Witt Local--Global Principle over a Rational Function Field}{document-title}
+\maketitle
+
+\begin{abstract}
+Let $R$ be a real closed field and $F=R(X)$.  We give the proof formalized
+in the Lean project \texttt{lean-ratfunc-witt-local-global}: every finite-dimensional
+quadratic form over $F$, of dimension at least three, is isotropic if and
+only if it is isotropic after extension to every real closed ordered extension
+of $F$.  The proof constructs an ordered real closure for the ternary base
+case and then uses a sign-separating binary--tail compression to induct on the
+dimension.  We also record the correspondence between the mathematical lemmas
+and the public Lean declarations.
+\end{abstract}
+
+\section{Statement and conventions}
+
+Throughout, $R$ is a real closed field and $F=R(X)$.  If $I$ is finite
+and $a=(a_i)_{i\in I}$ is a family in $F$, write
+\[
+  \langle a\rangle(x)=\sum_{i\in I}a_i x_i^2.
+\]
+The diagonal form is \emph{isotropic} if this sum vanishes for some nonzero
+vector $x\in F^I$.  An ordering $P$ of $F$ makes a regular diagonal form
+definite if all coefficients are strictly positive in $P$, or all are
+strictly negative in $P$.
+
+\begin{theorem}[Diagonal local--global theorem]\label{thm:diagonal}
+Let $I$ be finite with $|I|\ge3$, and let $a:I\to F$.  The following are
+equivalent.
+\begin{enumerate}[label=(\roman*)]
+  \item $\langle a\rangle$ is isotropic over $F$.
+  \item No ordering of $F$ makes all coefficients of $a$ have the same
+        strict sign.
+  \item For every real closed ordered field $K$ equipped with an
+        $F$-algebra structure, the scalar extension
+        $\langle a\rangle_K$ is isotropic.
+\end{enumerate}
+In (iii), the Lean theorem quantifies over target fields in a fixed universe;
+for another universe it takes the existence of a corresponding ordered real
+closure as an explicit input.
+\end{theorem}
+
+\begin{theorem}[Quadratic-form local--global theorem]\label{thm:qf}
+Let $V$ be a finite-dimensional $F$-vector space with
+$\dim_F V\ge3$, and let $q:V\to F$ be a quadratic form.  Then $q$ is not
+anisotropic if and only if every scalar extension of $q$ to a real closed
+ordered extension of $F$ is not anisotropic.
+As in Theorem~\ref{thm:diagonal}, the formal statement quantifies over
+same-universe targets; a universe-parameterized version assumes a suitable
+ordered real closure.
+\end{theorem}
+
+Zero coefficients cause no difficulty: a coordinate vector is immediately
+isotropic.  Thus the proof may assume all coefficients are nonzero until the
+final total statement.
+
+\paragraph{Reading guide.}
+The proof uses fields, unique
+factorization in $R[X]$, the Chinese remainder theorem, finite-dimensional
+linear algebra, and Zorn's lemma.  The less standard ingredients are developed
+where they are first needed.  Section~2 constructs the ordered real closure
+used to turn orderings into genuine test fields.  Section~3 proves the ternary
+case by translating a diagonal form into a quaternion conic and carrying out
+the same polynomial descent as the Lean development.  Sections~4--5 construct
+one rational function with prescribed signs and use it to reduce the dimension
+by one.  Section~6 passes from diagonal forms to arbitrary quadratic forms.
+The final table gives the Lean declaration implementing every major step, so a
+reader may move in either direction between this proof and the source.
+
+\section{Orderings and real closed extensions}
+
+We first isolate two standard observations.
+
+\begin{lemma}[Definiteness obstruction]\label{lem:definite}
+If a diagonal form is isotropic over an ordered field, its coefficients
+are neither all strictly positive nor all strictly negative.
+\end{lemma}
+\begin{proof}
+If all coefficients are positive, every nonzero summand $a_i x_i^2$ is
+nonnegative and at least one is positive.  Hence their sum is positive.
+Negating the form treats the all-negative case.
+\end{proof}
+
+\begin{lemma}[Diagonal forms over a real closed field]\label{lem:rcdiag}
+Let $K$ be real closed and let all coefficients $b_i\in K$ be nonzero.
+Then $\langle b\rangle$ is anisotropic if and only if all $b_i$ have the
+same strict sign.
+\end{lemma}
+\begin{proof}
+The reverse implication is Lemma~\ref{lem:definite}.  Otherwise choose
+the inequalities $b_i>0>b_j$.  Since $-b_j/b_i>0$, it is a square in $K$; if
+$u^2=-b_j/b_i$, the vector with coordinate $u$ at $i$, coordinate $1$ at $j$,
+and zero elsewhere is isotropic.
+\end{proof}
+
+The formalization does not assume an ordered real closure as an extra axiom.
+It constructs one in the same universe.  We give the construction in some
+detail, including the polynomial induction used for odd extensions, because
+this is the input that makes the ternary statement unconditional.
+
+\subsection{Two ordering-extension lemmas}
+
+A \emph{preordering} of a field $L$ is a subset containing $0$ and every
+square and closed under addition and multiplication.  It is \emph{proper} if
+$-1$ does not belong to it.  An ordering is the same as a proper preordering
+$P$ for which $P\cup(-P)=L$.
+
+\begin{lemma}[Artin--Schreier extension lemma]\label{lem:preorder-extension}
+Every proper preordering of a field is contained in an ordering.
+\end{lemma}
+\begin{proof}
+Order the proper preorderings containing the given one by inclusion.  The
+union of a chain is again a proper preordering, so Zorn's lemma gives a maximal
+one, say $P$.  We show that it is total.  If neither $x$ nor $-x$ belongs to
+$P$, maximality says that the preorderings generated by $P\cup\{x\}$ and by
+$P\cup\{-x\}$ both contain $-1$.  Since powers of $x$ may be separated into
+even and odd powers, these two statements have the form
+\[
+  -1=p+xq,\qquad -1=r-xs
+  \quad(p,q,r,s\in P).
+\]
+Thus $xq=-(1+p)$ and $xs=1+r$.  Multiplication gives
+\[
+  x^2qs=-(1+p)(1+r)\in P.
+\]
+The left side belongs to $P$, so the displayed negative element does too.
+Adding $p+r+pr\in P$ gives $-1\in P$, a contradiction.
+Thus $x\in P$ or $-x\in P$ for every $x$, and $P$ is an ordering.
+\end{proof}
+
+\begin{lemma}[Positive projection criterion]\label{lem:projection}
+Let $L/E$ be a field extension of an ordered field.  Suppose that there is an
+$E$-linear map $\lambda:L\to E$ such that
+\[
+  z\ne0\quad\Longrightarrow\quad \lambda(z^2)>0.
+\]
+Then the ordering of $E$ extends to an ordering of $L$.
+\end{lemma}
+\begin{proof}
+Let $P$ be the preordering of $L$ generated by the nonnegative elements of
+$E$ and by the squares of $L$.  Every element of $P$ is a finite sum
+$\sum_i a_i z_i^2$ with $a_i\ge0$.  If this sum were $-1$, applying
+$\lambda$ would make its right-hand side nonnegative.  On the other hand,
+the hypothesis applied to $1\ne0$ gives $\lambda(1)>0$, and hence
+\[
+  \lambda(-1)=-\lambda(1)<0.
+\]
+This is impossible.  Hence $P$ is proper, and
+Lemma~\ref{lem:preorder-extension} applies.  The resulting cone contains the
+old nonnegative elements.  If $a>0$ in $E$ but $-a$ also belonged to the new
+cone, then multiplication by the old positive element $a^{-1}$ would put
+$-1$ in that cone.  Thus old positive elements remain strictly positive, so
+the old ordering is indeed extended.
+\end{proof}
+
+\subsection{Odd power-basis extensions}
+
+The odd-degree part uses the following elementary polynomial lemma.  It is
+included because the parity argument is easy to lose if it is compressed into
+the phrase ``an odd extension is orderable.''
+
+\begin{lemma}[Odd power-basis lemma]\label{lem:odd-power-basis}
+Let $E$ be ordered and let $L=E(\theta)$ have a power basis of odd dimension
+$n$.  Then the preordering generated by the nonnegative elements of $E$ and
+the squares of $L$ is proper.
+\end{lemma}
+\begin{proof}
+Let $f$ be the monic irreducible polynomial of $\theta$, so $\deg f=n$.
+For $m\ge1$, let $\mathcal C_m$ be the set of polynomials that are finite sums
+\[
+  g=\sum_\nu a_\nu h_\nu^2,\qquad
+  a_\nu\ge0,\quad \deg h_\nu<m.
+\]
+If $g\ne0$ lies in $\mathcal C_m$, the terms of largest degree cannot cancel:
+their leading coefficients are sums of nonnegative squares.  Consequently
+\[
+  \operatorname{lc}(g)>0,\qquad
+  \deg g\ \hbox{is even},\qquad
+  \deg g<2m.                                      \tag{1}
+\]
+
+We prove by strong induction on the odd number $m$ that, for every monic
+irreducible $r$ of degree $m$ and every $g\in\mathcal C_m$,
+\[
+  r\nmid g+1.                                      \tag{2}
+\]
+Suppose instead that $g+1=rk$.  The polynomial $g+1$ is nonzero because a
+member of $\mathcal C_m$ cannot equal $-1$.  Since $r$ has positive
+degree and divides $g+1$, the latter cannot be constant.  Thus $g$ is
+nonconstant and $\deg(g+1)=\deg g$.  By (1),
+\[
+  \deg g=m+\deg k<2m.
+\]
+Since $\deg g$ is even and $m$ is odd, $\deg k$ is odd; moreover
+$\deg k<m$.  Factorization in $E[T]$ therefore supplies a monic irreducible
+factor $r'$ of $k$ having odd degree.  In
+$E'=E[T]/(r')$, evaluation sends $k$ to zero, hence sends $g$ to $-1$.
+Evaluation also sends $\mathcal C_m$ into the additive span of nonnegative
+$E$-multiples of squares in $E'$.
+
+Every element of $E'$ has a representative of degree $<\deg r'$.  Replacing
+each square by such a representative lifts the equality $g(\bar T)=-1$ to a
+polynomial $g'\in\mathcal C_{\deg r'}$ with
+$g'(\bar T)=-1$.  Thus $r'\mid g'+1$, contrary to the induction hypothesis
+because $\deg r'<m$.  This proves (2).
+
+If the preordering in $L$ contained $-1$, writing its finitely many square
+terms in the power basis would produce $g\in\mathcal C_n$ with
+$g(\theta)=-1$.  The minimal polynomial $f$ would divide $g+1$, contradicting
+(2).
+\end{proof}
+
+\begin{proposition}[Ordered real closure]\label{prop:orc}
+Every ordered field $E$ admits an algebraic real closed ordered extension
+whose order extends that of $E$.
+\end{proposition}
+\begin{proof}
+Fix an algebraic closure $\Omega/E$.  Consider intermediate fields
+$M\subseteq\Omega$ equipped with an ordering extending that of $E$, ordered
+by inclusion with compatible positive cones.  Unions of chains again carry a
+compatible ordering, so Zorn's lemma gives a maximal $M$.
+
+We verify the two conditions in the ordered-field characterization of real
+closed fields.
+
+First let $0<a\in M$.  Choose $\alpha\in\Omega$ with $\alpha^2=a$.  If
+$a$ is not already a square in $M$, then $T^2-a$ is irreducible and
+$L=M(\alpha)$ is a proper quadratic extension.  In coordinates
+$z=x+y\alpha$, the $M$-linear projection to the real coordinate satisfies
+\[
+  \pi(z^2)=x^2+a y^2>0\qquad(z\ne0).
+\]
+Lemma~\ref{lem:projection} orders $L$ over $M$, contradicting maximality.
+Hence every nonnegative element of $M$ is a square.
+
+Second, let $p\in M[T]$ have odd degree.  It has a monic irreducible factor
+$r$ of odd degree: in any factorization of $p$, the sum of the degrees is
+odd, so one irreducible factor has odd degree.  If $\alpha\in\Omega$ is a
+root of $r$, then $M(\alpha)/M$ has an odd-dimensional power basis.
+Lemma~\ref{lem:odd-power-basis} and
+Lemma~\ref{lem:preorder-extension} order $M(\alpha)$ over $M$.
+Maximality forces $\alpha\in M$, so every odd-degree polynomial has a root
+in $M$.
+
+An ordered field in which every nonnegative element is a square and every
+odd-degree polynomial has a root is real closed.  Therefore $M$ is the
+required extension.
+\end{proof}
+
+\section{The ternary base theorem}
+
+The induction begins with the following theorem.
+
+\begin{theorem}[Ternary local--global theorem]\label{thm:ternary}
+Let $a,b,c\in F^\times$.  Then
+$\langle a,b,c\rangle$ is isotropic over $F$ if and only if it is
+isotropic over every real closed ordered extension of $F$.
+\end{theorem}
+
+We now give the algebraic core actually used in the Lean proof.  It is a
+polynomial Legendre argument organized as a quaternion-symbol descent.
+
+\subsection{Quaternion symbols and polynomial normalization}
+
+For $u,v\in F^\times$, write $(u,v)$ for the quaternion symbol.  We shall use
+only its elementary conic interpretation:
+\[
+ (u,v)\ \hbox{splits}
+ \quad\Longleftrightarrow\quad
+ \exists (x,y,z)\ne(0,0,0),\quad x^2-u y^2-v z^2=0.       \tag{3}
+\]
+Thus
+\[
+ \langle a,b,c\rangle\ \hbox{is isotropic}
+ \quad\Longleftrightarrow\quad
+ \left(-\frac ba,-\frac ca\right)\ \hbox{splits}.         \tag{4}
+\]
+Multiplying either slot by a nonzero square does not change splitting.
+We also use the norm move
+\[
+ (u,v)\simeq (u,v(x^2-u y^2)),                            \tag{5}
+\]
+whenever the displayed multiplier is nonzero.  Formula (5) follows directly
+from
+\[
+ (x^2-u y^2)(X^2-uY^2)
+   =(xX+u yY)^2-u(yX+xY)^2.
+\]
+Thus multiplication by the norm $x^2-u y^2$ is an invertible change in the
+binary norm equation.  If the third coordinate in (3) is nonzero, divide by
+its square and apply this identity; if it is zero, $u$ is already a square
+and both symbols split.  Applying the same calculation to the inverse norm
+gives the converse.
+Together with symmetry and cyclic permutation of a ternary form, these are
+all quaternion identities used below.
+
+Clearing denominators, multiplying the whole ternary form by one common
+nonzero scalar, and removing an individual square from every coefficient
+gives nonzero squarefree polynomials $A,B,C$.  They may be chosen pairwise
+coprime.  Indeed, at each irreducible polynomial $\pi$, only the parities of
+the three valuations matter.  Individual square removal makes the parities
+$0$ or $1$, and multiplying all three coefficients by $\pi$ flips all three
+bits.  We choose the representative in which at most one bit is $1$.
+These operations preserve isotropy and preserve the property that all three
+coefficients have one strict sign at an ordering.
+
+For such a triple put
+\[
+  \mathcal Q(A,B,C)=(-AB,-AC).
+\]
+It differs from the normalized symbol in (4) only by square factors.
+
+\subsection{Finite congruences}
+
+We realize signs at a finite point and at infinity by Laurent series.  The
+ordered field $R((\varepsilon))$ is ordered by declaring a nonzero series
+positive when its first nonzero coefficient is positive.  The embeddings
+\[
+  X\longmapsto r+\varepsilon,\qquad
+  X\longmapsto r-\varepsilon
+\]
+give the orderings immediately to the right and left of $r$; the embeddings
+$X\mapsto\varepsilon^{-1}$ and
+$X\mapsto-\varepsilon^{-1}$ give the two orderings at infinity.  A polynomial
+with a simple root at $r$ has leading Laurent term
+$P'(r)\varepsilon$ or $-P'(r)\varepsilon$, respectively.  At infinity its
+leading Laurent term is its ordinary leading coefficient times the
+corresponding power of $\varepsilon^{-1}$.  These observations justify every
+``approach from a side'' and ``sign at infinity'' used below.  Passing to a
+real closure of $R((\varepsilon))$ does not change any of these signs.
+
+\begin{lemma}[Legendre congruences]\label{lem:legendre-congruences}
+Let $A,B,C$ be nonzero, squarefree, and pairwise coprime.  If no ordering of
+$F$ gives $A,B,C$ one common strict sign, then
+\[
+\begin{array}{ll}
+ -BC\text{ is a square modulo }\pi &(\pi\mid A),\\
+ -AC\text{ is a square modulo }\pi &(\pi\mid B),\\
+ -AB\text{ is a square modulo }\pi &(\pi\mid C)
+\end{array}                                             \tag{6}
+\]
+for every monic irreducible $\pi$.  Hence the same three assertions hold
+modulo $A,B,C$, respectively.
+\end{lemma}
+\begin{proof}
+Consider $\pi\mid A$; the other cases are cyclic.  Pairwise coprimality makes
+$BC$ nonzero modulo $\pi$.
+
+If $\pi=X-r$ is linear, then ``$-BC$ is not a square modulo $\pi$'' means
+$-B(r)C(r)<0$, because over the real closed field $R$ the nonzero squares are
+exactly the positive elements.  Hence $B(r)$ and $C(r)$ have the same sign.
+They keep that sign sufficiently close to $r$, whereas squarefreeness makes
+$A$ have a simple root and opposite signs on the two sides.  Choose the side
+on which the sign of $A$ agrees with those of $B$ and $C$.  The Laurent
+ordering corresponding to approaching $r$ from that side then makes all
+three polynomials have one strict sign, a contradiction.
+
+If $\pi$ is nonlinear, real closedness implies $\deg\pi=2$.  The field
+$R[X]/(\pi)$ is the algebraic closure $R(\sqrt{-1})$, so every nonzero element
+of it is a square.  Thus (6) holds in this case as well.
+
+Finally, a squarefree polynomial is a product of distinct irreducibles.
+The Chinese remainder theorem combines the square roots modulo those factors
+and gives a square root modulo the whole polynomial.
+\end{proof}
+
+\subsection{The polynomial pivot descent}
+
+The next lemma is the precise termination argument behind the Lean ternary
+proof.  ``Real split'' means that the symbol splits after every homomorphism
+to a real closed ordered field.
+
+\begin{lemma}[Cyclic pivot step]\label{lem:pivot}
+Let $A,B,C$ be nonzero squarefree pairwise-coprime polynomials satisfying the
+whole-modulus congruences (6), and suppose that $\mathcal Q(A,B,C)$ is real
+split.  If at least one coefficient is nonconstant, then either
+$\mathcal Q(A,B,C)$ already splits over $F$, or there are nonzero squarefree
+pairwise-coprime $A',B',C'$ such that
+\[
+\begin{split}
+ \mathcal Q(A,B,C)\text{ splits}
+   &\Longleftrightarrow \mathcal Q(A',B',C')\text{ splits},\\
+ \mathcal Q(A,B,C)\text{ is real split}
+   &\Longleftrightarrow \mathcal Q(A',B',C')\text{ is real split},\\
+ \deg A'+\deg B'+\deg C'
+   &<\deg A+\deg B+\deg C.
+\end{split}                                             \tag{7}
+\]
+and the new triple again satisfies (6).
+\end{lemma}
+\begin{proof}
+We first choose a cyclic ordering, denoted again by $(A,B,C)$, with $A$ as
+pivot.  Unless all three positive degrees are equal, a coefficient of maximal
+degree can be chosen so that
+\[
+  \deg B+\deg C<2\deg A.                                \tag{8}
+\]
+Choose, using (6), a representative $x$ of degree $<\deg A$ satisfying
+$x^2\equiv-BC\pmod A$, and define $d$ by
+\[
+  x^2+BC=Ad.                                             \tag{9}
+\]
+The bounds on $x$ and (8) give $\deg d<\deg A$, unless $d=0$.
+
+If $d=0$, then $x^2=-BC$, and $(0,C,x)$ is a nonzero isotropic
+vector for $\langle A,B,C\rangle$.  This is the terminal branch.
+
+Assume $d\ne0$.  Cyclic permutation identifies $\mathcal Q(A,B,C)$ with
+$(-BC,-AB)$ up to splitting.  Apply (5) with $u=-BC$ and norm
+$x^2+BC=Ad\ne0$.  The second slot becomes $-A^2Bd$; removing the square
+factor $A^2$ gives $(-BC,-Bd)=\mathcal Q(B,C,d)$.  Thus
+\[
+  \mathcal Q(A,B,C)\text{ splits}
+  \quad\Longleftrightarrow\quad
+  \mathcal Q(B,C,d)\text{ splits}.                       \tag{10}
+\]
+All these changes remain valid after any field embedding, since their
+nonzero denominators and norm factors remain nonzero.
+
+Apply the parity normalization described above to the triple
+$(B,C,d)$.  At each irreducible factor, remove even valuations; if the factor
+occurs in two or three slots, multiply all slots by it and remove the newly
+created squares.  The number of occurrences then changes from $2$ to $1$, or
+from $3$ to $0$.  Hence this process produces a squarefree pairwise-coprime
+triple $(A',B',C')$ without increasing total degree.  Common scaling and
+individual square substitutions preserve both ordinary splitting and real
+splitting, so (10) gives the first two equivalences in (7).
+
+The new triple cannot have one common strict sign in any ordering.  Otherwise
+extend that ordering to a real closure.  Both slots of its cleared symbol
+would then be negative, so (3) would make the symbol nonsplit, contradicting
+real splitting.  Lemma~\ref{lem:legendre-congruences}, followed by the Chinese
+remainder theorem, therefore restores the whole-modulus form of (6).  The
+Lean proof additionally records the direct transport through (9): a
+Bézout identity for each coprime pair turns an old square witness into the
+corresponding new one before the same normalization.
+
+The degree bookkeeping is also explicit.  Before square removal the new total
+degree is bounded by
+\[
+  \deg B+\deg C+\deg d
+  <\deg A+\deg B+\deg C.
+\]
+Removing squares and common factors cannot increase it, proving (7).
+
+It remains to treat
+$\deg A=\deg B=\deg C=m>0$.  The orderings at $+\infty$ and $-\infty$ are
+realized by Laurent series.  Real splitting therefore rules out three leading
+coefficients of one sign.  After a cyclic permutation we may assume
+$\operatorname{lc}(B)\operatorname{lc}(C)<0$.  Choose
+$r\in R$ with
+\[
+  r^2=-\operatorname{lc}(B)\operatorname{lc}(C),
+\]
+which is possible because $R$ is real closed.  Start with the reduced square
+root $x_0$ modulo $A$ and replace it by
+$x=x_0+tA$, where
+$t=r/\operatorname{lc}(A)$.  This does not alter the congruence modulo $A$,
+but it cancels the coefficient of degree $2m$ in $x^2+BC$.  Thus (9) again
+has $d=0$ or $\deg d<m$, and the preceding argument applies.
+\end{proof}
+
+\begin{proposition}[Polynomial quaternion--Legendre criterion]\label{prop:legendre}
+Let $A,B,C\in R[X]$ be nonzero, squarefree, and pairwise coprime.  Suppose
+that the ternary form $\langle A,B,C\rangle$ has no ordering obstruction.
+Then there are polynomials $x,y,z$, not all zero, such that
+\[
+  Ax^2+By^2+Cz^2=0.
+\]
+\end{proposition}
+
+\begin{proof}
+By Lemma~\ref{lem:legendre-congruences}, the triple satisfies (6).  At every
+real closed image, the three coefficients are not all of one sign, so at
+least one of $-AB$ and $-AC$ is positive.  A positive element of a real
+closed field is a square, and (3) shows that $\mathcal Q(A,B,C)$ is real
+split.
+
+We prove that it splits over $F$ by strong induction on
+$N=\deg A+\deg B+\deg C$.  If $N=0$, the coefficients are nonzero constants.
+They are not all of one sign, so one of $-AB$ and $-AC$ is positive and
+hence a square in $R$; the symbol splits by (3).  If $N>0$, apply
+Lemma~\ref{lem:pivot}.  The terminal alternative is finished.  Otherwise the
+successor has smaller total degree, still satisfies (6), and is real split.
+The induction hypothesis splits the successor, and the first equivalence in
+(7) splits the original symbol.
+
+By (3), splitting $\mathcal Q(A,B,C)=(-AB,-AC)$ gives a nonzero triple
+$(x,y,z)$ with
+\[
+ x^2+AB\,y^2+AC\,z^2=0.
+\]
+Dividing by $A$ rewrites this as
+\[
+ A(x/A)^2+B y^2+C z^2=0.
+\]
+Thus $(x/A,y,z)$ is a nonzero rational-function isotropic vector.  Clearing
+its common denominator gives polynomials, not all zero, satisfying
+$Ax^2+By^2+Cz^2=0$.
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{thm:ternary}]
+One direction is scalar extension.  Conversely, local isotropy and
+Lemma~\ref{lem:rcdiag}, applied through the ordered real closure of
+Proposition~\ref{prop:orc}, show that no ordering makes the three coefficients
+have the same strict sign.  Apply the squarefree pairwise-coprime
+normalization above and identify the ternary equation with the splitting
+equation for the quaternion symbol
+\[
+  \left(-\frac ba,-\frac ca\right).
+\]
+Proposition~\ref{prop:legendre} gives a nonzero polynomial isotropic vector;
+undoing the common scaling and the individual square substitutions gives a
+nonzero isotropic vector for $\langle a,b,c\rangle$ over $F$.
+\end{proof}
+
+\section{The sign-separating compression coefficient}
+
+We now pass from dimension $n$ to dimension $n+1$.  Split the coefficient
+family into a binary head $h=(h_0,h_1)$ and a nonempty tail
+$t=(t_j)_{j\in J}$.
+
+\begin{definition}[Required sign]\label{def:reqsign}
+At an ordered field point, the required sign of an auxiliary coefficient
+$s$ is negative precisely when
+\[
+  (h_0>0\ \text{and}\ h_1>0)
+  \quad\text{or}\quad
+  (t_j<0\ \text{for all }j).
+\]
+It is positive otherwise.
+\end{definition}
+
+\begin{lemma}[Compression sign lemma]\label{lem:compress-sign}
+Assume the combined family $h\sqcup t$ does not have one common strict sign.
+If $s\ne0$ has the required sign, then neither
+\[
+  \langle h_0,h_1,s\rangle,
+  \qquad
+  \langle (t_j)_{j\in J},-s\rangle
+\]
+has one common strict sign.
+\end{lemma}
+\begin{proof}
+If both head coefficients are positive, $s<0$.  If both are negative, the
+whole family is not all negative, so the tail is not all negative and the
+definition gives $s>0$.  If the head has a zero coefficient or both signs,
+it already has no common strict sign.  Thus the first family has no common
+strict sign.  If the tail
+is all negative, then $s<0$, so $-s>0$.  If the tail is all positive, the
+head cannot be all positive, hence $s>0$ and $-s<0$.  A tail already
+containing a zero coefficient or both signs needs no further argument.
+\end{proof}
+
+The important point is that one rational function $s$ realizes this sign
+simultaneously at every ordering.
+
+\begin{lemma}[Squarefree polynomial representative]\label{lem:squarefree-normal}
+Every $f\in F^\times$ can be written
+\[
+  f=Aq^2
+\]
+with $A\in R[X]$ nonzero and squarefree and $q\in F^\times$.
+\end{lemma}
+\begin{proof}
+Write $f=p/r$ with nonzero $p,r\in R[X]$.  Then
+$f=(pr)/r^2$.  Unique factorization writes
+$pr=A h^2$, where $A$ is the product of the nonzero constant unit and
+precisely those monic irreducible factors that occur to odd multiplicity.
+Hence $A$ is squarefree and
+$f=A(h/r)^2$.
+\end{proof}
+
+\begin{proposition}[Signed-root skeleton]\label{prop:skeleton}
+Suppose $h\sqcup t$ is a regular coefficient family over $F$ with no
+common strict-sign ordering.  There exists $s\in F^\times$ that has the
+required sign of Definition~\ref{def:reqsign} in every real closed ordered
+extension of $F$.
+\end{proposition}
+\begin{proof}
+Use Lemma~\ref{lem:squarefree-normal} to write every coefficient in the form
+\[
+  a_i=A_i q_i^2,
+  \qquad A_i\in R[X]\setminus\{0\}\text{ squarefree}.
+\]
+Multiplication by $q_i^2$ changes neither a strict sign nor isotropy.  Let
+$\Sigma\subset R$ be the finite set of all real roots of all $A_i$.
+On each component of $R\setminus\Sigma$, every coefficient sign, and hence
+the required sign, is constant.
+
+For $r\in\Sigma$, put $r$ into a set $E$ exactly when the required signs
+immediately to the left and right of $r$ differ.  Choose
+$\varepsilon\in\{1,-1\}$ to obtain the required sign on one outer interval,
+and define the skeleton polynomial
+\[
+  S(X)=\varepsilon\prod_{r\in E}(X-r).
+\]
+Crossing a root in $E$ changes the sign of $S$, and crossing a root not in
+$E$ does not; induction across the ordered breakpoints proves that $S$ has
+the required sign at every ordinary point outside $\Sigma$.
+
+Now let $\varphi:F\to L$ be a homomorphism to an ordered real closed field,
+and put $\xi=\varphi(X)$.  Since $X-r\ne0$ in $F$, injectivity gives
+$\xi\ne\varphi(r)$ for every $r\in\Sigma$.  Choose $y\in R$ having the
+same finite cut with respect to $\Sigma$ as $\xi$: between two consecutive
+points take their midpoint, and on an outer interval take a point one unit
+beyond the endpoint.  If $\Sigma$ is empty, take $y=0$.  A field
+homomorphism between real closed ordered fields
+preserves order, because every positive element is a nonzero square.
+Polynomial signs at $y$ and at $\xi$ therefore agree.  Indeed, over a real
+closed field a polynomial is a product of real linear factors, irreducible
+quadratic factors having no root and constant sign, and its leading
+coefficient.  The linear-factor signs are exactly the finite-cut data.
+Thus $\varphi(S)$ has the required sign.  Taking $s=S$ in $F$ proves the
+claim.
+\end{proof}
+
+\section{Dimension induction}
+
+We need one elementary reconstruction lemma.
+
+\begin{lemma}[Binary--tail reconstruction]\label{lem:reconstruct}
+Let $J$ be finite, $s\ne0$, and let $\psi=(\psi_j)_{j\in J}$.  If both
+\[
+  \langle a,b,s\rangle
+  \quad\text{and}\quad
+  \langle (\psi_j)_{j\in J},-s\rangle
+\]
+are isotropic, then $\langle a,b,(\psi_j)_{j\in J}\rangle$ is isotropic.
+\end{lemma}
+\begin{proof}
+Take an isotropic vector $(y,t)$ for the second form, so
+\[
+  \sum_j\psi_jy_j^2=s t^2.
+\]
+If $t=0$, the tail itself is isotropic and we are done.  If $t\ne0$, take
+an isotropic vector $(u,v,w)$ for $\langle a,b,s\rangle$.  Substituting
+$s=\sum_j\psi_j(y_j/t)^2$ gives
+\[
+  au^2+bv^2+\sum_j\psi_j\left(\frac{w y_j}{t}\right)^2=0.
+\]
+The resulting vector is nonzero; otherwise $u=v=0$, and the first isotropic
+vector would force $w=0$ because $s\ne0$.
+\end{proof}
+
+\begin{proposition}[Induction step]\label{prop:step}
+Assume the ordering-obstruction criterion implies isotropy for diagonal forms
+indexed by $J\sqcup\{*\}$, where $J\ne\varnothing$.  Then it also implies
+isotropy for forms indexed by $\{0,1\}\sqcup J$.
+\end{proposition}
+\begin{proof}
+Let $h\sqcup t$ be regular and have no common strict-sign ordering.  Choose
+the coefficient $s$ from Proposition~\ref{prop:skeleton}.  In every real
+closed ordered extension, restriction of the order to $F$ and the original
+obstruction hypothesis let Lemma~\ref{lem:compress-sign} apply.
+Lemma~\ref{lem:rcdiag} then makes both compressed forms isotropic.
+
+The ternary local--global theorem therefore makes
+$\langle h_0,h_1,s\rangle$ isotropic over $F$.  The augmented tail has no
+ordering obstruction: extend any proposed definite ordering to a real closure
+by Proposition~\ref{prop:orc}.  There $s$ has the required sign, so
+Lemma~\ref{lem:compress-sign} contradicts definiteness of $\langle t,-s\rangle$.
+The induction hypothesis therefore makes
+$\langle t,-s\rangle$ isotropic over $F$.  Apply
+Lemma~\ref{lem:reconstruct}.
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{thm:diagonal}]
+Lemma~\ref{lem:definite} gives (i)$\Rightarrow$(ii).  The ternary case of
+(ii)$\Rightarrow$(i) is Theorem~\ref{thm:ternary}, because every real closed
+image is indefinite and hence isotropic by Lemma~\ref{lem:rcdiag}.
+Proposition~\ref{prop:step} now proves the implication in every dimension
+$n\ge3$ by induction.  Reindexing by a bijection with $\{0,\ldots,n-1\}$
+handles every finite index type.  If a coefficient is zero, its coordinate
+vector handles the omitted nonregular case.
+
+The implication (i)$\Rightarrow$(iii) is scalar extension.  Conversely,
+apply (iii) to the ordered real closure extending any proposed definite
+ordering.  Lemma~\ref{lem:rcdiag} gives a contradiction, so (ii) holds and the
+already proved implication gives (i).
+\end{proof}
+
+\section{General quadratic forms}
+
+\begin{lemma}[Orthogonal diagonalization]\label{lem:diagonalization}
+Over a field of characteristic different from $2$, every quadratic form on a
+finite-dimensional vector space has an orthogonal basis.
+\end{lemma}
+\begin{proof}
+Let $B_q(x,y)=q(x+y)-q(x)-q(y)$ be the associated symmetric bilinear form, so
+$B_q(v,v)=2q(v)$.  We argue by induction on the dimension.  If $q=0$, every
+basis is orthogonal.  Otherwise choose $v$ with $q(v)\ne0$.  For every $x$ put
+\[
+  x^\perp=x-\frac{B_q(x,v)}{2q(v)}v.
+\]
+Then $B_q(x^\perp,v)=0$, and every $x$ is uniquely a sum of a multiple of
+$v$ and an element of $v^\perp$.  Hence
+$V=Fv\oplus v^\perp$.  Apply the induction hypothesis to the restriction of
+$q$ to $v^\perp$ and adjoin $v$ to the resulting orthogonal basis.
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{thm:qf}]
+The characteristic is zero, so Lemma~\ref{lem:diagonalization} gives an
+orthogonal basis $e_1,\ldots,e_n$.  In that basis $q$ is isometric to
+\[
+  \sum_{i=1}^n q(e_i)X_i^2.
+\]
+This statement includes the degenerate case: some $q(e_i)$ may be zero, and
+Theorem~\ref{thm:diagonal} already handles it.  The isometry remains an
+isometry after scalar extension, and an invertible linear change of variables
+preserves the existence of a nonzero isotropic vector.  Apply
+Theorem~\ref{thm:diagonal} to the coefficient family
+$(q(e_i))$ and transport both directions through these isometries.
+\end{proof}
+
+\section{Correspondence with Lean}
+
+The principal correspondence is shown below.  A mathematical lemma may map to
+several smaller Lean declarations; the table names the public consumer or the
+module-level endpoint.
+
+\begingroup
+\scriptsize
+\begin{center}
+\begin{tabular}{p{0.31\linewidth}p{0.62\linewidth}}
+Mathematical result & Lean declaration \\ \hline
+Definiteness obstruction & \lean{RatFuncWittLocalGlobal.RatFunc.not_finiteSameStrictSignOrdering_of_isotropic} \\
+Real-closed diagonal criterion & \lean{RatFuncWittLocalGlobal.Diagonal.not_isotropic_iff_all_pos_or_all_neg} \\
+Preordering extension & \lean{RingPreordering.exists_le_isOrdering} \\
+Positive projection criterion & \lean{RingPreordering.exists_orderedAlgebraExtension_of_projection} \\
+Odd power-basis lemma & \lean{RatFuncWittLocalGlobal.OrderedRealClosure.minus_one_notMem_baseSquareSpan_of_odd_powerBasis} \\
+Ordered real closure & \lean{RatFuncWittLocalGlobal.OrderedRealClosure.orderedFieldRealClosedExtension_same_universe} \\
+Quadratic maximality step & \lean{RatFuncWittLocalGlobal.OrderedRealClosure.nonnegative_isSquare_of_isMax} \\
+Odd-degree maximality step & \lean{RatFuncWittLocalGlobal.OrderedRealClosure.exists_root_of_odd_natDegree_of_isMax} \\
+Ternary theorem & \lean{RatFuncWittLocalGlobal.RatFunc.ternary_isotropic_iff_forall_realClosedExtension_same_universe} \\
+Finite Legendre congruences & \lean{RatFuncWittLocalGlobal.RatFunc.PolynomialLegendreLocalConditions} \\
+Whole-modulus constructor & \lean{RatFuncWittLocalGlobal.polynomialTernaryFiniteTameResiduesTrivial_globalSquareMod} \\
+Nonlinear residue square & \lean{RatFuncWittLocalGlobal.RatFunc.nonlinearIrreducibleDivisorSquareMod_of_realClosed} \\
+Cleared-binary normalization & \lean{RatFuncWittLocalGlobal.RatFunc.normalizedTernaryLocalGlobal_iff_squarefree_nonterminal_right} \\
+Pivot successor & \lean{RatFuncWittLocalGlobal.polynomialTernaryClearedQuaternionSplit_descent_wholeMod_normalized_right_pivot_complete} \\
+Total-degree induction & \lean{RatFuncWittLocalGlobal.polynomialTernaryClearedQuaternionSplit_of_wholeMod_realSplit} \\
+Legendre endpoint bridge & \lean{RatFuncWittLocalGlobal.polynomialLegendreConstruction_of_normalizedOrderingRealization} \\
+Squarefree normal form & \lean{RatFuncWittLocalGlobal.finitePolynomialState_exists} \\
+Compression sign lemma & \lean{RatFuncWittLocalGlobal.binaryTailCompressionRequiredSign_spec} \\
+Skeleton transport & \lean{RatFuncWittLocalGlobal.FinitePolynomialState.binaryTailSkeleton_allOrdered} \\
+Finite-cut sign transport & \lean{RatFuncWittLocalGlobal.polynomial_eval₂_pos_iff_eval_of_same_finite_cut} \\
+Reconstruction & \lean{RatFuncWittLocalGlobal.Diagonal.isotropic_sumType_of_ternary_of_tailAdjoinNeg} \\
+Induction step & \lean{RatFuncWittLocalGlobal.diagonalOrderingObstructionSufficiency_sum_fin_two} \\
+Total diagonal theorem & \lean{RatFuncWittLocalGlobal.diagonal_isotropic_iff_forall_realClosedExtension_of_card_ge_three_same_universe_total} \\
+Isometry invariance & \lean{RatFuncWittLocalGlobal.quadraticMap_isometryEquiv_not_anisotropic_iff} \\
+Base-change diagonal isometry & \lean{RatFuncWittLocalGlobal.quadraticFormBaseChangeIsometryWeightedSumSquares} \\
+General quadratic form & \lean{RatFuncWittLocalGlobal.quadraticForm_not_anisotropic_iff_forall_realClosedExtension_same_universe}
+\end{tabular}
+\end{center}
+\endgroup
+
+The reproducible audit in \texttt{scripts/AxiomAudit.lean} checks that the main
+theorems use only \texttt{propext}, \texttt{Classical.choice}, and
+\texttt{Quot.sound}.  No project-specific axiom is introduced.
+The bundle and transport declarations in the proof implement the congruences,
+normalizations, finite-cut argument, and changes of coordinates proved above;
+they do not supply an additional unstated mathematical theorem.
+
+\begin{thebibliography}{9}
+\bibitem{Lam}
+T. Y. Lam,
+\emph{Introduction to Quadratic Forms over Fields},
+Graduate Studies in Mathematics 67, American Mathematical Society, 2005.
+
+\bibitem{Pfister}
+A. Pfister,
+\emph{Quadratic Forms with Applications to Algebraic Geometry and Topology},
+London Mathematical Society Lecture Note Series 217,
+Cambridge University Press, 1995.
+\end{thebibliography}
+
+\end{document}

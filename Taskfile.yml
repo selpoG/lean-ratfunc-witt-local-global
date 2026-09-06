@@ -1,0 +1,38 @@
+version: '3'
+
+tasks:
+  axiom-audit:
+    desc: Check the standard axiom dependencies of the public endpoints
+    cmds:
+      - lake env lean scripts/AxiomAudit.lean
+
+  duplicate-declaration-audit:
+    desc: Reject normalized theorem, instance, and definition duplicates in this project
+    cmds:
+      - |
+        log="$(mktemp)"
+        trap 'rm -f "$log"' EXIT
+        lake env lean -DmaxHeartbeats=6000000 \
+          scripts/DuplicateDeclarationAudit.lean > "$log"
+        if rg -n -B 2 -A 12 'RatFuncWittLocalGlobal' "$log"; then
+          echo 'Duplicate project declarations found' >&2
+          exit 1
+        fi
+
+  pdf:
+    desc: Build the Japanese and English Witt local-global proof PDFs
+    cmds:
+      - uplatex -interaction=nonstopmode -halt-on-error -output-directory=docs docs/ratfunc_witt_local_global_ja.tex
+      - uplatex -interaction=nonstopmode -halt-on-error -output-directory=docs docs/ratfunc_witt_local_global_ja.tex
+      - uplatex -interaction=nonstopmode -halt-on-error -output-directory=docs docs/ratfunc_witt_local_global_ja.tex
+      - dvipdfmx -o docs/ratfunc_witt_local_global_ja.pdf docs/ratfunc_witt_local_global_ja.dvi
+      - uplatex -interaction=nonstopmode -halt-on-error -output-directory=docs docs/ratfunc_witt_local_global_en.tex
+      - uplatex -interaction=nonstopmode -halt-on-error -output-directory=docs docs/ratfunc_witt_local_global_en.tex
+      - dvipdfmx -o docs/ratfunc_witt_local_global_en.pdf docs/ratfunc_witt_local_global_en.dvi
+      - |
+        if rg -n 'Warning|Overfull|Underfull|undefined|Error|Fatal' \
+          docs/ratfunc_witt_local_global_en.log \
+          docs/ratfunc_witt_local_global_ja.log; then
+          echo "TeX build logs contain diagnostics" >&2
+          exit 1
+        fi

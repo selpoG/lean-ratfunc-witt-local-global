@@ -1,0 +1,24 @@
+name: Lean
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: leanprover/lean-action@v1
+        with:
+          use-github-cache: true
+          build-args: RatFuncWittLocalGlobal
+      - name: Style lint
+        run: lake exe lint-style RatFuncWittLocalGlobal
+      - name: Public axiom audit
+        run: lake env lean scripts/AxiomAudit.lean

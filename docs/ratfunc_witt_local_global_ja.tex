@@ -1,0 +1,707 @@
+\documentclass[uplatex,dvipdfmx]{jsarticle}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{enumitem}
+\usepackage{seqsplit}
+\usepackage[
+  dvipdfmx,
+  unicode,
+  bookmarks=true,
+  bookmarksnumbered=true,
+  bookmarksopen=true,
+  bookmarksdepth=2
+]{hyperref}
+% pxjahyper converts Japanese strings in PDF metadata and outlines to Unicode.
+% It must be loaded after hyperref when compiling with upLaTeX + dvipdfmx.
+% TeX Live 2022's pxjahyper uses the deprecated spelling of one optional OTF
+% package hook.  Silence only that kernel message while loading the package.
+\ExplSyntaxOn
+\msg_redirect_name:nnn { hooks } { generic-deprecated } { none }
+\ExplSyntaxOff
+\usepackage[nootfcid,nootfmacros]{pxjahyper}
+\ExplSyntaxOn
+\msg_redirect_name:nnn { hooks } { generic-deprecated } { warning }
+\ExplSyntaxOff
+\usepackage{bookmark}
+\hypersetup{
+  hidelinks,
+  pdftitle={有理関数体上の Witt 型 Local--Global 原理},
+  pdfauthor={selpo},
+  pdfsubject={Lean 形式化と対応する完全な数学的証明}
+}
+
+\newcommand{\RF}{R(X)}
+\newcommand{\RatFunc}{\operatorname{RatFunc}}
+\newcommand{\lean}[1]{\texttt{\expandafter\seqsplit\expandafter{\detokenize{#1}}}}
+
+\newtheorem{theorem}{定理}
+\newtheorem{proposition}[theorem]{命題}
+\newtheorem{lemma}[theorem]{補題}
+\newtheorem{corollary}[theorem]{系}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{定義}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{注意}
+\renewcommand{\proofname}{証明}
+
+\title{有理関数体上の Witt 型 Local--Global 原理}
+\author{selpo}
+\date{}
+
+\begin{document}
+\pdfbookmark[0]{有理関数体上の Witt 型 Local--Global 原理}{document-title}
+\maketitle
+
+\begin{abstract}
+$R$ を実閉体、$F=R(X)$ を一変数有理関数体とする。
+Lean プロジェクト \texttt{lean-ratfunc-witt-}\allowbreak\texttt{local-global} で
+形式化した次の定理の証明を与える：
+次元3以上の有限次元二次形式は、$F$ 上 isotropic であることと、$F$ の任意の
+実閉順序拡大上 isotropic であることが同値である。三項基底定理のための ordered real
+closure を構成し、その後、符号分離を行う binary--tail compression によって次元帰納する。
+最後に数学上の補題と Lean 宣言の対応を記録する。
+\end{abstract}
+
+\section{主定理と記法}
+
+以下 $R$ は実閉体、$F=R(X)$ とする。有限集合 $I$ と係数族
+$a=(a_i)_{i\in I}$ に対し
+\[
+  \langle a\rangle(x)=\sum_{i\in I}a_i x_i^2
+\]
+と書く。非零ベクトル $x\in F^I$ でこの和が零になるとき、この対角形式を
+\emph{isotropic} と呼ぶ。regular な対角形式について、$F$ の ordering において
+全係数がstrictに正、または全係数がstrictに負になるとき、その ordering で形式は
+definite であるという。
+
+\begin{theorem}[対角形式の local--global 定理]\label{thm:diagonal-ja}
+$I$ を有限集合、$|I|\ge3$、$a:I\to F$ とする。このとき次は同値である。
+\begin{enumerate}[label=(\roman*)]
+  \item $\langle a\rangle$ は $F$ 上 isotropic である。
+  \item 全係数が同じ strict sign を持つような $F$ の ordering は存在しない。
+  \item 任意の実閉 ordered $F$-algebra $K$ 上で、scalar extension
+        $\langle a\rangle_K$ は isotropic である。
+\end{enumerate}
+Lean の same-universe 版では (iii) の $K$ を固定した universe 内で量化する。
+別 universe の版では、量化対象が空になることを避けるため、対応する ordered real
+closure の存在を明示的な引数に取る。
+\end{theorem}
+
+\begin{theorem}[一般二次形式の local--global 定理]\label{thm:qf-ja}
+$V$ を $\dim_F V\ge3$ の有限次元 $F$-vector space、$q:V\to F$ を
+二次形式とする。このとき $q$ が anisotropic でないことと、任意の実閉 ordered
+extension 上の scalar extension が anisotropic でないことは同値である。
+形式化された定理は対角形式の場合と同様に same-universe の対象を量化し、別 universe
+の版では対応する ordered real closure を明示的に仮定する。
+\end{theorem}
+
+係数が零なら対応する座標ベクトルが直ちに isotropic である。したがって証明途中では
+全係数非零と仮定し、最後に零係数の場合を戻せばよい。
+
+\paragraph{読み方と前提知識}
+体、$R[X]$ の一意分解、Chinese remainder theorem、有限次元線形代数、および
+Zorn の補題を用いる。それ以外の本証明に
+固有な道具は、初めて必要になる箇所で定義し証明する。第2節では ordering を実閉な
+検査体へ移すための ordered real closure を構成する。第3節では三項対角形式を
+quaternion conic に翻訳し、Lean 本線と同じ polynomial descent を実行する。
+第4--5節では、全 ordering で所要の符号を持つ一つの有理関数を構成し、次元を一つ
+下げる。第6節で対角形式から一般二次形式へ移る。最後の対応表から、各数学的段階を
+実装する Lean 宣言を確認できるので、本文とソースを双方向に読み進められる。
+
+\section{Ordering と実閉拡大}
+
+\begin{lemma}[Definiteness obstruction]\label{lem:definite-ja}
+順序体上の対角形式が isotropic なら、その全係数が strict に正となることも、
+全係数が strict に負となることもない。
+\end{lemma}
+\begin{proof}
+全係数が正なら、非零ベクトルにおける各項 $a_ix_i^2$ は非負で、少なくとも一項は
+正であるから総和は正である。全係数が負の場合は形式全体を負にして同様である。
+\end{proof}
+
+\begin{lemma}[実閉体上の対角形式]\label{lem:rcdiag-ja}
+$K$ を実閉体、$b_i\in K^\times$ とする。$\langle b\rangle$ が
+anisotropic であることと、全ての $b_i$ が同じ strict sign を持つことは同値である。
+\end{lemma}
+\begin{proof}
+一方向は補題~\ref{lem:definite-ja}。異符号の係数 $b_i>0>b_j$ があれば
+$-b_j/b_i>0$ であり、実閉体では正元は平方である。$u^2=-b_j/b_i$ として
+$i$ 座標を $u$、$j$ 座標を $1$、他を零にすれば isotropic vector を得る。
+\end{proof}
+
+形式化では ordered real closure の存在を外部仮定にせず、同じ universe 内で構成する。
+ここでは、奇数次拡大に用いる polynomial induction も含め、Lean の証明と同じ構造を
+詳しく示す。
+
+\subsection{Ordering を延長する二つの補題}
+
+体 $L$ の \emph{preordering} とは、$0$ と全ての平方を含み、加法と乗法で閉じた
+部分集合である。$-1$ を含まないとき \emph{proper} という。
+$P\cup(-P)=L$ を満たす proper preordering は ordering と同じものである。
+
+\begin{lemma}[Artin--Schreier extension lemma]\label{lem:preorder-extension-ja}
+体の任意の proper preordering は ordering に含まれる。
+\end{lemma}
+\begin{proof}
+与えられた preordering を含む proper preorderings を包含で順序付ける。chain の合併も
+proper なので、Zorn の補題により最大元 $P$ がある。$P$ が total であることを示す。
+$x,-x\notin P$ と仮定する。最大性より $P\cup\{x\}$ と $P\cup\{-x\}$ が生成する
+preordering はいずれも $-1$ を含む。$x$ の偶数冪はすでに $P$ にあるので
+\[
+  -1=p+xq,\qquad -1=r-xs
+  \quad(p,q,r,s\in P)
+\]
+と書ける。従って $xq=-(1+p)$、$xs=1+r$ であり
+\[
+  x^2qs=-(1+p)(1+r)\in P.
+\]
+ここへ $p+r+pr\in P$ を加えると $-1\in P$ となり矛盾する。従って各 $x$ について
+$x\in P$ または $-x\in P$ であり、$P$ は ordering である。
+\end{proof}
+
+\begin{lemma}[正な射影による判定]\label{lem:projection-ja}
+$L/E$ を順序体 $E$ の体拡大とする。$E$-linear map $\lambda:L\to E$ が
+\[
+  z\ne0\quad\Longrightarrow\quad\lambda(z^2)>0
+\]
+を満たすなら、$E$ の ordering は $L$ へ延長できる。
+\end{lemma}
+\begin{proof}
+$E$ の非負元と $L$ の平方から生成される preordering $P$ を考える。
+$P$ の元は有限和 $\sum_i a_i z_i^2$（$a_i\ge0$）である。もしこの和が $-1$ なら、
+$\lambda$ を作用させた右辺は非負である。一方、仮定を $1\ne0$ に適用すると
+$\lambda(1)>0$ だから
+\[
+  \lambda(-1)=-\lambda(1)<0
+\]
+となり矛盾する。従って $P$ は proper であり、
+補題~\ref{lem:preorder-extension-ja}を適用できる。得られる cone は $E$ の非負元を
+含む。$a>0$ なのに $-a$ も新しい cone に入れば、$E$ の正元 $a^{-1}$ を掛けて
+$-1$ が cone に入るので矛盾する。従って $E$ の正元は正のまま保たれ、これは
+もとの ordering の延長である。
+\end{proof}
+
+\subsection{奇数次 power basis}
+
+「奇数次拡大は orderable」という部分の偶奇を明確にするため、Lean で用いた
+polynomial lemma を証明する。
+
+\begin{lemma}[奇数次 power-basis lemma]\label{lem:odd-power-basis-ja}
+$E$ を順序体、$L=E(\theta)$ が奇数次元 $n$ の power basis を持つとする。
+$E$ の非負元と $L$ の平方から生成される preordering は proper である。
+\end{lemma}
+\begin{proof}
+$f$ を $\theta$ の monic irreducible polynomial とすると $\deg f=n$ である。
+$m\ge1$ に対し
+\[
+  g=\sum_\nu a_\nu h_\nu^2,\qquad
+  a_\nu\ge0,\quad \deg h_\nu<m
+\]
+と書ける polynomial 全体を $\mathcal C_m$ とする。非零 $g\in\mathcal C_m$ では
+最大次数の項の leading coefficient は非負な平方の和であり、相殺しない。従って
+\[
+  \operatorname{lc}(g)>0,\qquad
+  \deg g\text{ は偶数},\qquad
+  \deg g<2m.                                           \tag{1}
+\]
+
+奇数 $m$ に関する強帰納法で、次数 $m$ の任意の monic irreducible $r$ と
+$g\in\mathcal C_m$ に対し
+\[
+  r\nmid g+1                                           \tag{2}
+\]
+を示す。反対に $g+1=rk$ とする。$\mathcal C_m$ の元は $-1$ でないので
+$g+1\ne0$ である。正の次数を持つ $r$ が $g+1$ を割るため、$g+1$ は非定数である。
+従って $g$ も非定数であり、$\deg(g+1)=\deg g$ となる。(1) から
+\[
+  \deg g=m+\deg k<2m.
+\]
+$\deg g$ は偶数、$m$ は奇数なので $\deg k$ は奇数で、しかも $\deg k<m$ である。
+$k$ の既約因子のうち一つは奇数次数である。それを monic にして $r'$ とする。
+$E'=E[T]/(r')$ で評価すると $k=0$、従って $g=-1$ となる。
+一方、$\mathcal C_m$ の評価は、$E$ の非負元を係数とする平方の additive span に入る。
+
+$E'$ の各元を次数 $<\deg r'$ の polynomial で表し直すと、この $-1$ の表示を
+$g'\in\mathcal C_{\deg r'}$ へ持ち上げられる。すると $r'\mid g'+1$ となり、
+$\deg r'<m$ に対する帰納法の仮定に反する。これで (2) が示された。
+
+$L$ の preordering が $-1$ を含むなら、有限個の平方を power basis で表すことにより
+$g\in\mathcal C_n$ かつ $g(\theta)=-1$ となる。すると最小多項式 $f$ が $g+1$ を割り、
+(2) に反する。
+\end{proof}
+
+\begin{proposition}[Ordered real closure]\label{prop:orc-ja}
+任意の順序体 $E$ は、その順序を延長する代数的な実閉順序拡大を持つ。
+\end{proposition}
+\begin{proof}
+代数閉包 $\Omega/E$ を固定する。$E$ を含む中間体と、$E$ の順序を延長する
+ordering の組を、compatible な包含で順序付ける。chain の合併にも compatible ordering
+が入るので、Zorn の補題により最大元 $M$ を得る。
+
+まず $0<a\in M$ とする。$\alpha^2=a$ なる $\alpha\in\Omega$ を取る。
+$a$ が $M$ で平方でないなら $T^2-a$ は既約であり、$L=M(\alpha)$ は真の二次拡大
+である。$z=x+y\alpha$ の実部への射影は
+\[
+  \pi(z^2)=x^2+a y^2>0\qquad(z\ne0)
+\]
+を満たす。補題~\ref{lem:projection-ja}により $L$ を $M$ 上 orderable にできるので、
+最大性に反する。よって $M$ の全非負元は平方である。
+
+次に $p\in M[T]$ の次数が奇数とする。$p$ は奇数次数の monic irreducible factor
+$r$ を持つ。実際、既約因子の次数の和が奇数なので、そのうち一つは奇数次数である。
+$\alpha\in\Omega$ をその根とすれば、$M(\alpha)/M$ は奇数次の power basis を持つ。
+補題~\ref{lem:odd-power-basis-ja}と補題~\ref{lem:preorder-extension-ja}により
+$M(\alpha)$ は $M$ 上 orderable であり、最大性から $\alpha\in M$ となる。
+ゆえに全奇数次多項式は $M$ に根を持つ。
+
+「全非負元が平方」かつ「全奇数次多項式が根を持つ」という順序体の特徴付けにより
+$M$ は実閉体である。
+\end{proof}
+
+\section{三項基底定理}
+
+\begin{theorem}[三項 local--global 定理]\label{thm:ternary-ja}
+$a,b,c\in F^\times$ とする。$\langle a,b,c\rangle$ が $F$ 上 isotropic
+であることと、任意の実閉 ordered extension 上 isotropic であることは同値である。
+\end{theorem}
+
+以下では Lean の本線で実際に用いる代数的核心を示す。これは quaternion symbol の
+descent として整理した polynomial Legendre argument である。
+
+\subsection{Quaternion symbol と polynomial normalization}
+
+$u,v\in F^\times$ に対する quaternion symbol を $(u,v)$ と書く。必要なのは次の
+conic による特徴付けだけである：
+\[
+ (u,v)\text{ が split}
+ \quad\Longleftrightarrow\quad
+ \exists(x,y,z)\ne(0,0,0),\quad x^2-u y^2-v z^2=0.       \tag{3}
+\]
+従って
+\[
+ \langle a,b,c\rangle\text{ が isotropic}
+ \quad\Longleftrightarrow\quad
+ \left(-\frac ba,-\frac ca\right)\text{ が split}.      \tag{4}
+\]
+各 slot を非零平方倍しても split 性は変わらない。また
+\[
+ (u,v)\simeq (u,v(x^2-u y^2))                            \tag{5}
+\]
+という norm move を、$x^2-u y^2\ne0$ のときに使う。その計算は
+\[
+ (x^2-u y^2)(X^2-uY^2)
+   =(xX+u yY)^2-u(yX+xY)^2
+\]
+である。(3) の第三座標が非零ならその平方で割ってこの恒等式を適用する。第三座標が
+零なら $u$ 自身が平方なので両symbolはsplitする。逆normに同じ計算を使えば逆向きも
+従う。以下で用いる quaternion identity は、(5)、slot の
+対称性、ternary form の cyclic permutation だけである。
+
+分母を払い、形式全体を一つの共通非零scalar倍し、各係数から平方を除くと、
+非零squarefree polynomials $A,B,C$ を得る。これらは pairwise coprime に選べる。
+実際、各既約 polynomial $\pi$ について三係数の valuation parity だけを考える。
+各平方を除くと parity は $0,1$ であり、形式全体を $\pi$ 倍すると三つの bit が全て
+反転する。そこで $1$ の個数が高々一つになる方を選べばよい。これらの操作は
+isotropy と「三係数が同じ strict sign」という性質を保つ。
+
+\[
+  \mathcal Q(A,B,C)=(-AB,-AC)
+\]
+と置く。これは (4) の normalized symbol と平方類を除いて同じである。
+
+\subsection{有限 place の合同条件}
+
+有限点と無限遠の符号は Laurent series で実現する。ordered field
+$R((\varepsilon))$ では、非零seriesの最初の非零係数が正であるとき、そのseriesを正と
+定める。
+\[
+  X\longmapsto r+\varepsilon,\qquad X\longmapsto r-\varepsilon
+\]
+は $r$ の直後・直前のorderingを与え、
+$X\mapsto\varepsilon^{-1}$ と $X\mapsto-\varepsilon^{-1}$ は二つの無限遠orderingを
+与える。$r$ にsimple rootを持つpolynomialの先頭Laurent項はそれぞれ
+$P'(r)\varepsilon$ と $-P'(r)\varepsilon$ である。無限遠では通常のleading coefficientと
+$\varepsilon^{-1}$ の対応する冪が先頭項になる。以下の「片側から近づく」「無限遠の符号」
+は全てこの構成を意味する。$R((\varepsilon))$ のreal closureへ移しても符号は変わらない。
+
+\begin{lemma}[Legendre congruence]\label{lem:legendre-congruences-ja}
+$A,B,C$ を非零、squarefree、pairwise coprime とする。三係数を同じ strict sign にする
+ordering がなければ、任意の monic irreducible $\pi$ について
+\[
+\begin{array}{ll}
+ -BC\text{ は modulo }\pi\text{ で平方} &(\pi\mid A),\\
+ -AC\text{ は modulo }\pi\text{ で平方} &(\pi\mid B),\\
+ -AB\text{ は modulo }\pi\text{ で平方} &(\pi\mid C)
+\end{array}                                             \tag{6}
+\]
+となる。従って同じ三条件はそれぞれ modulo $A,B,C$ でも成り立つ。
+\end{lemma}
+\begin{proof}
+$\pi\mid A$ の場合を示せば、他は cyclic に同じである。pairwise coprime 性から
+$BC$ は modulo $\pi$ で非零である。
+
+$\pi=X-r$ が一次とする。$-BC$ が modulo $\pi$ で平方でないなら、実閉体 $R$ では
+非零平方が正元と一致するので $-B(r)C(r)<0$、従って $B(r),C(r)$ は同符号である。
+$r$ の十分近くでは両者の符号は変わらない。一方、squarefree 性から $A$ は $r$ で
+単純根を持ち、左右で符号が反転する。$A$ の符号が $B,C$ と一致する側から $r$ へ
+近づく Laurent ordering を取ると、三係数が同符号になり矛盾する。
+
+$\pi$ が非線形なら、実閉体上の既約 polynomial なので $\deg\pi=2$ である。
+$R[X]/(\pi)$ は代数閉体 $R(\sqrt{-1})$ であり、その全ての非零元は平方である。
+従ってこの場合も (6) が成り立つ。
+
+最後に squarefree polynomial は相異なる既約因子の積である。各因子 modulo の
+平方根を中国剰余定理で貼り合わせると、polynomial 全体 modulo の平方根を得る。
+\end{proof}
+
+\subsection{Polynomial pivot descent}
+
+次の補題が Lean の ternary proof の停止性を与える。``real split'' は、任意の
+実閉順序体への homomorphism で移した symbol が split であることを意味する。
+
+\begin{lemma}[Cyclic pivot step]\label{lem:pivot-ja}
+$A,B,C$ を非零squarefree pairwise-coprime polynomials とし、(6) の whole-modulus
+conditionsを満たし、$\mathcal Q(A,B,C)$ が real split とする。少なくとも一係数が
+非定数なら、$\mathcal Q(A,B,C)$ がすでに $F$ 上 split であるか、または非零squarefree
+pairwise-coprime $A',B',C'$ が存在して
+\[
+\begin{split}
+ \mathcal Q(A,B,C)\text{ split}
+   &\Longleftrightarrow\mathcal Q(A',B',C')\text{ split},\\
+ \mathcal Q(A,B,C)\text{ real split}
+   &\Longleftrightarrow\mathcal Q(A',B',C')\text{ real split},\\
+ \deg A'+\deg B'+\deg C'
+   &<\deg A+\deg B+\deg C.
+\end{split}                                             \tag{7}
+\]
+となり、新しい triple も (6) を満たす。
+\end{lemma}
+\begin{proof}
+まず cyclic permutation により $A$ を pivot に選ぶ。三つの正な次数が全て等しい場合
+を除けば、最大次数の係数を選ぶことにより
+\[
+  \deg B+\deg C<2\deg A                                \tag{8}
+\]
+とできる。(6) により $x^2\equiv-BC\pmod A$ を満たす $\deg x<\deg A$ の代表を取り
+\[
+  x^2+BC=Ad                                             \tag{9}
+\]
+と定める。$x$ の次数boundと (8) から、$d=0$ または $\deg d<\deg A$ である。
+
+$d=0$ なら $x^2=-BC$ であり、$(0,C,x)$ は $\langle A,B,C\rangle$ の
+非零 isotropic vector である。これが terminal branch である。
+
+$d\ne0$ とする。cyclic permutation により $\mathcal Q(A,B,C)$ の split 性は
+$(-BC,-AB)$ の split 性と同値である。(5) で $u=-BC$、norm を
+$x^2+BC=Ad\ne0$ とすると第二 slot は $-A^2Bd$ になる。
+平方因子 $A^2$ を除けば $(-BC,-Bd)=\mathcal Q(B,C,d)$ を得る。従って
+\[
+  \mathcal Q(A,B,C)\text{ split}
+  \quad\Longleftrightarrow\quad
+  \mathcal Q(B,C,d)\text{ split}                        \tag{10}
+\]
+である。これらの変換は、分母と norm の非零性が保たれるため、任意の体埋め込み後にも
+成立する。
+
+上で説明した parity normalization を triple $(B,C,d)$ に適用する。
+各既約因子について偶数valuationを除き、その因子が二つまたは三つのslotに現れる場合は
+全slotをその因子倍して新しく生じた平方を除く。出現数は $2$ から $1$、または $3$ から
+$0$ へ減る。従ってtotal degreeを増やさずに squarefree pairwise-coprime triple
+$(A',B',C')$ を得る。共通scalar倍と各平方置換はsplit性とreal split性を保つので、
+(10) から (7) の最初の二つの同値を得る。
+
+新しい triple を同じ strict sign にする ordering は存在しない。もし存在すれば、その
+orderingをreal closureへ延長したとき、cleared symbolの二つのslotがともに負になり、
+(3) によりnonsplitとなってreal split性に反する。
+補題~\ref{lem:legendre-congruences-ja}と中国剰余定理により (6) のwhole-modulus conditionsを
+再び得る。Leanではさらに (9) に沿う直接のtransportも記録しており、各coprime pairの
+Bézout identityを使って旧square witnessから新しいwitnessを作ってから同じnormalizationを
+行う。
+
+次数については、平方・gcd除去前でも新しいtotal degreeは
+\[
+  \deg B+\deg C+\deg d
+  <\deg A+\deg B+\deg C
+\]
+であり、除去操作は次数を増やさない。従って (7) が成り立つ。
+
+残る場合は $\deg A=\deg B=\deg C=m>0$ である。$+\infty,-\infty$ の ordering は
+Laurent series で実現されるので、real split 性から三つのleading coefficientが
+同符号になることはない。cyclic permutation後
+$\operatorname{lc}(B)\operatorname{lc}(C)<0$ としてよい。実閉性により
+\[
+  r^2=-\operatorname{lc}(B)\operatorname{lc}(C)
+\]
+となる $r\in R$ がある。modulo $A$ の reduced square root $x_0$ を
+$x=x_0+tA$、$t=r/\operatorname{lc}(A)$ で置き換える。合同は変わらないが、
+$x^2+BC$ の次数 $2m$ の係数は相殺する。従って (9) で再び
+$d=0$ または $\deg d<m$ となり、上の議論へ帰着する。
+\end{proof}
+
+\begin{proposition}[Polynomial quaternion--Legendre criterion]\label{prop:legendre-ja}
+$A,B,C\in R[X]$ を非零、squarefree、pairwise coprime とする。
+$\langle A,B,C\rangle$ に ordering obstruction がなければ、全て零ではない
+$x,y,z\in R[X]$ が存在して
+\[
+  Ax^2+By^2+Cz^2=0
+\]
+となる。
+\end{proposition}
+
+\begin{proof}
+補題~\ref{lem:legendre-congruences-ja}により (6) が成り立つ。任意の実閉imageでは
+三係数が同符号でないため、$-AB,-AC$ の少なくとも一方は正である。実閉体の正元は
+平方なので、(3) から $\mathcal Q(A,B,C)$ は real split である。
+
+$N=\deg A+\deg B+\deg C$ に関する強帰納法で $F$ 上 split であることを示す。
+$N=0$ なら三係数は非零定数で同符号でないから、$-AB,-AC$ の少なくとも一方が正、
+従って平方であり、(3) から symbol は split する。$N>0$ では
+補題~\ref{lem:pivot-ja}を適用する。terminal branchなら終了し、successor branchなら
+total degreeが小さく、(6) と real split 性が保たれる。帰納法の仮定が successor を
+splitし、(7) の同値が元の symbol を splitする。
+
+(3) により $\mathcal Q(A,B,C)=(-AB,-AC)$ の split から
+\[
+  x^2+AB\,y^2+AC\,z^2=0
+\]
+を満たす非零 $(x,y,z)$ を得る。$A$ で割ると
+\[
+  A(x/A)^2+B y^2+C z^2=0
+\]
+である。従って $(x/A,y,z)$ は非零有理関数isotropic vectorであり、共通分母を払えば
+全て零でない polynomial solution を得る。
+\end{proof}
+
+\begin{proof}[定理~\ref{thm:ternary-ja}の証明]
+一方向はscalar extensionである。逆に、全実閉拡大上のisotropyと
+補題~\ref{lem:rcdiag-ja}、命題~\ref{prop:orc-ja}から、三係数を同符号にするorderingは
+存在しない。上で説明した squarefree pairwise-coprime normalizationを行い、
+三項方程式をquaternion symbol
+\[
+  \left(-\frac ba,-\frac ca\right)
+\]
+のsplit equationへ移す。命題~\ref{prop:legendre-ja}のpolynomial solutionを得た後、
+共通scalar倍と各平方置換を逆にたどれば、元の $\langle a,b,c\rangle$ に対する
+$F$ 上の非零isotropic vectorを得る。
+\end{proof}
+
+\section{符号分離compression係数}
+
+係数族をbinary head $h=(h_0,h_1)$ と非空tail $t=(t_j)_{j\in J}$ に分ける。
+
+\begin{definition}[Required sign]\label{def:reqsign-ja}
+ordered fieldの各点で、補助係数 $s$ のrequired signを
+\[
+  (h_0>0\land h_1>0)\ \lor\ (\forall j,\ t_j<0)
+\]
+のとき負、それ以外のとき正と定める。
+\end{definition}
+
+\begin{lemma}[Compression sign lemma]\label{lem:compress-sign-ja}
+結合族 $h\sqcup t$ がcommon strict signを持たず、$s\ne0$ がrequired signを持つとする。
+このとき
+\[
+  \langle h_0,h_1,s\rangle,
+  \qquad
+  \langle (t_j)_{j\in J},-s\rangle
+\]
+のいずれもcommon strict signを持たない。
+\end{lemma}
+\begin{proof}
+headが全正なら $s<0$。headが全負なら、全体は全負でないのでtailは全負でなく、
+$s>0$。head が零係数または異符号の係数を含むなら、すでに common strict sign はない。
+従って第一形式は common strict sign を持たない。tailが全負なら $s<0$ なので $-s>0$。
+tailが全正ならheadは全正であり得ず、$s>0$ なので $-s<0$。tail自身が零係数または異符号を
+含む場合は自明である。
+\end{proof}
+
+重要なのは、全orderingで同時にこの符号を実現する一つの有理関数を作ることである。
+
+\begin{lemma}[Squarefree polynomial representative]\label{lem:squarefree-normal-ja}
+任意の $f\in F^\times$ は
+\[
+  f=Aq^2
+\]
+（$A\in R[X]$ は非零squarefree、$q\in F^\times$）と書ける。
+\end{lemma}
+\begin{proof}
+$f=p/r$（$p,r\in R[X]$ は非零）と書けば $f=(pr)/r^2$ である。
+unique factorizationにより $pr=Ah^2$ と書く。ここで $A$ は非零の定数単元と、
+奇数multiplicityで現れる monic 既約因子の積なのでsquarefreeである。
+従って $f=A(h/r)^2$ となる。
+\end{proof}
+
+\begin{proposition}[Signed-root skeleton]\label{prop:skeleton-ja}
+regular family $h\sqcup t$ にcommon strict-sign orderingがなければ、任意の実閉ordered
+extensionでrequired signを持つ $s\in F^\times$ が存在する。
+\end{proposition}
+\begin{proof}
+補題~\ref{lem:squarefree-normal-ja}を用いて各係数を
+\[
+  a_i=A_iq_i^2,
+  \qquad A_i\in R[X]\setminus\{0\}\text{ squarefree}
+\]
+と書く。平方倍はstrict signとisotropyを変えない。全 $A_i$ の実根全体を有限集合
+$\Sigma\subset R$ とする。$R\setminus\Sigma$ の各成分では全係数の符号、従って
+required signは一定である。
+
+$r\in\Sigma$ の左右でrequired signが変わる場合に限り $r$ を $E$ に入れる。
+一つの外側区間で符号を合わせる $\varepsilon\in\{1,-1\}$ を取り
+\[
+  S(X)=\varepsilon\prod_{r\in E}(X-r)
+\]
+と置く。$E$ の根を横切るときだけ $S$ の符号も反転するため、breakpointを順に
+横切る帰納により、$S$ は $\Sigma$ 外の全実点でrequired signを持つ。
+
+次に $\varphi:F\to L$ を実閉順序体への準同型、$\xi=\varphi(X)$ とする。
+$X-r\ne0$ とinjectivityから $\xi\ne\varphi(r)$。$\Sigma$ に対して $\xi$ と同じ
+finite cutを持つ $y\in R$ を選ぶ。隣接する二点の間なら中点、外側の区間なら端点から
+1だけ外の点を取ればよい。$\Sigma$ が空なら $y=0$ とする。
+実閉順序体間のfield homomorphismは正元を非零平方へ送るので
+orderを保つ。実閉体上のpolynomialは実一次因子、根を持たず一定符号の既約二次因子、
+leading coefficientの積に分解できる。一次因子の符号はfinite cutだけで決まるから、
+$y$ と $\xi$ で全 $A_i$ と $S$ の符号は一致する。ゆえに $\varphi(S)$ がrequired
+signを持つ。$s=S\in F$ とすればよい。
+\end{proof}
+
+\section{次元帰納}
+
+\begin{lemma}[Binary--tail reconstruction]\label{lem:reconstruct-ja}
+$J$ を有限、$s\ne0$ とする。
+$\langle a,b,s\rangle$ と
+$\langle(\psi_j)_{j\in J},-s\rangle$ がともにisotropicなら、
+$\langle a,b,(\psi_j)_{j\in J}\rangle$ もisotropicである。
+\end{lemma}
+\begin{proof}
+第二形式のisotropic vectorを $(y,t)$ とすると
+\[
+  \sum_j\psi_jy_j^2=s t^2.
+\]
+$t=0$ ならtail自身がisotropicである。$t\ne0$ なら第一形式のisotropic vector
+$(u,v,w)$ を取り、$s=\sum_j\psi_j(y_j/t)^2$ を代入して
+\[
+  au^2+bv^2+\sum_j\psi_j\left(\frac{wy_j}{t}\right)^2=0
+\]
+を得る。このvectorが零なら $u=v=0$ となり、$s\ne0$ と第一のisotropyから
+$w=0$ となるので矛盾する。
+\end{proof}
+
+\begin{proposition}[帰納step]\label{prop:step-ja}
+$J\ne\varnothing$ とする。$J\sqcup\{*\}$ 添字の対角形式について
+ordering obstructionがないことからisotropyが従うなら、
+$\{0,1\}\sqcup J$ 添字についても同じことが従う。
+\end{proposition}
+\begin{proof}
+regular family $h\sqcup t$ にcommon strict-sign orderingがないとする。
+命題~\ref{prop:skeleton-ja}の $s$ を取る。任意の実閉ordered extensionで、そのorderを
+$F$ へ制限し、元のobstruction仮定と補題~\ref{lem:compress-sign-ja}を使える。
+補題~\ref{lem:rcdiag-ja}により二つのcompressed formはともにisotropicである。
+
+三項local--global定理から $\langle h_0,h_1,s\rangle$ は $F$ 上isotropicである。
+augmented tail $\langle t,-s\rangle$ を definite にする ordering があれば、
+命題~\ref{prop:orc-ja}でその実閉拡大へ移す。この拡大では $s$ が required sign を持ち、
+補題~\ref{lem:compress-sign-ja}の第二の結論に反する。従って ordering obstruction はなく、帰納仮定で
+$F$ 上isotropicである。
+補題~\ref{lem:reconstruct-ja}を適用する。
+\end{proof}
+
+\begin{proof}[定理~\ref{thm:diagonal-ja}の証明]
+補題~\ref{lem:definite-ja}が (i)$\Rightarrow$(ii) を与える。
+(ii)$\Rightarrow$(i) の三次元の場合は、任意の実閉imageで補題~\ref{lem:rcdiag-ja}を
+使い、定理~\ref{thm:ternary-ja}を適用すればよい。命題~\ref{prop:step-ja}により
+全 $n\ge3$ へ次元帰納する。\texttt{Fin n} 上の結果を有限型とのbijectionでreindexする。
+零係数の場合は対応するcoordinate vectorを使う。
+
+(i)$\Rightarrow$(iii) はscalar extensionである。逆にdefinite orderingが存在すると仮定し、
+そのordered real closureへ移すと補題~\ref{lem:rcdiag-ja}によりanisotropicとなり、(iii)に
+反する。従って(ii)が成り立ち、既に示した含意から(i)を得る。
+\end{proof}
+
+\section{一般二次形式}
+
+\begin{lemma}[Orthogonal diagonalization]\label{lem:diagonalization-ja}
+標数が $2$ でない体上の有限次元二次形式はorthogonal basisを持つ。
+\end{lemma}
+\begin{proof}
+$B_q(x,y)=q(x+y)-q(x)-q(y)$ をassociated symmetric bilinear formとすると
+$B_q(v,v)=2q(v)$ である。次元帰納する。$q=0$ なら任意のbasisでよい。
+$q\ne0$ なら $q(v)\ne0$ となる $v$ を選び、各 $x$ に対し
+\[
+  x^\perp=x-\frac{B_q(x,v)}{2q(v)}v
+\]
+と置く。$B_q(x^\perp,v)=0$ であり、各 $x$ は $v$ のscalar倍と $v^\perp$ の元の
+和として一意に書ける。従って $V=Fv\oplus v^\perp$ である。$v^\perp$ 上の制限に
+帰納法の仮定を使い、得られたorthogonal basisへ $v$ を加えればよい。
+\end{proof}
+
+\begin{proof}[定理~\ref{thm:qf-ja}の証明]
+標数は零なので、補題~\ref{lem:diagonalization-ja}によりorthogonal basis
+$e_1,\ldots,e_n$ を取れる。このbasisで $q$ は
+\[
+  \sum_{i=1}^n q(e_i)X_i^2
+\]
+とisometricである。退化する場合には一部の $q(e_i)$ が零になり得るが、
+定理~\ref{thm:diagonal-ja}は零係数も扱う。isometryはscalar extension後もisometryであり、
+invertible linear changeは非零isotropic vectorの存在を保つ。係数族 $(q(e_i))$ に
+定理~\ref{thm:diagonal-ja}を適用し、両方向をこれらのisometryで輸送する。
+\end{proof}
+
+\section{Lean 宣言との対応}
+
+\begingroup
+\scriptsize
+\begin{center}
+\begin{tabular}{p{0.30\linewidth}p{0.63\linewidth}}
+数学上の結果 & Lean 宣言 \\ \hline
+Definiteness obstruction & \lean{RatFuncWittLocalGlobal.RatFunc.not_finiteSameStrictSignOrdering_of_isotropic} \\
+実閉体上の対角判定 & \lean{RatFuncWittLocalGlobal.Diagonal.not_isotropic_iff_all_pos_or_all_neg} \\
+Preordering extension & \lean{RingPreordering.exists_le_isOrdering} \\
+正な射影による判定 & \lean{RingPreordering.exists_orderedAlgebraExtension_of_projection} \\
+奇数次power-basis lemma & \lean{RatFuncWittLocalGlobal.OrderedRealClosure.minus_one_notMem_baseSquareSpan_of_odd_powerBasis} \\
+Ordered real closure & \lean{RatFuncWittLocalGlobal.OrderedRealClosure.orderedFieldRealClosedExtension_same_universe} \\
+二次拡大の最大性 & \lean{RatFuncWittLocalGlobal.OrderedRealClosure.nonnegative_isSquare_of_isMax} \\
+奇数次拡大の最大性 & \lean{RatFuncWittLocalGlobal.OrderedRealClosure.exists_root_of_odd_natDegree_of_isMax} \\
+三項定理 & \lean{RatFuncWittLocalGlobal.RatFunc.ternary_isotropic_iff_forall_realClosedExtension_same_universe} \\
+有限Legendre congruence & \lean{RatFuncWittLocalGlobal.RatFunc.PolynomialLegendreLocalConditions} \\
+Whole-modulus constructor & \lean{RatFuncWittLocalGlobal.polynomialTernaryFiniteTameResiduesTrivial_globalSquareMod} \\
+非線形剰余の平方性 & \lean{RatFuncWittLocalGlobal.RatFunc.nonlinearIrreducibleDivisorSquareMod_of_realClosed} \\
+Cleared-binary normalization & \lean{RatFuncWittLocalGlobal.RatFunc.normalizedTernaryLocalGlobal_iff_squarefree_nonterminal_right} \\
+Pivot successor & \lean{RatFuncWittLocalGlobal.polynomialTernaryClearedQuaternionSplit_descent_wholeMod_normalized_right_pivot_complete} \\
+Total-degree induction & \lean{RatFuncWittLocalGlobal.polynomialTernaryClearedQuaternionSplit_of_wholeMod_realSplit} \\
+Legendre endpoint bridge & \lean{RatFuncWittLocalGlobal.polynomialLegendreConstruction_of_normalizedOrderingRealization} \\
+Squarefree normal form & \lean{RatFuncWittLocalGlobal.finitePolynomialState_exists} \\
+Compression sign lemma & \lean{RatFuncWittLocalGlobal.binaryTailCompressionRequiredSign_spec} \\
+Skeleton transport & \lean{RatFuncWittLocalGlobal.FinitePolynomialState.binaryTailSkeleton_allOrdered} \\
+Finite-cut sign transport & \lean{RatFuncWittLocalGlobal.polynomial_eval₂_pos_iff_eval_of_same_finite_cut} \\
+Reconstruction & \lean{RatFuncWittLocalGlobal.Diagonal.isotropic_sumType_of_ternary_of_tailAdjoinNeg} \\
+帰納step & \lean{RatFuncWittLocalGlobal.diagonalOrderingObstructionSufficiency_sum_fin_two} \\
+Total diagonal theorem & \lean{RatFuncWittLocalGlobal.diagonal_isotropic_iff_forall_realClosedExtension_of_card_ge_three_same_universe_total} \\
+Isometry invariance & \lean{RatFuncWittLocalGlobal.quadraticMap_isometryEquiv_not_anisotropic_iff} \\
+Base-change diagonal isometry & \lean{RatFuncWittLocalGlobal.quadraticFormBaseChangeIsometryWeightedSumSquares} \\
+一般二次形式 & \lean{RatFuncWittLocalGlobal.quadraticForm_not_anisotropic_iff_forall_realClosedExtension_same_universe}
+\end{tabular}
+\end{center}
+\endgroup
+
+再現可能な公理監査 \texttt{scripts/AxiomAudit.lean} は、主定理が依存する公理が
+\[
+  \texttt{propext},\qquad \texttt{Classical.choice},\qquad \texttt{Quot.sound}
+\]
+のみであることを検査し、異なる場合には失敗する。project固有のaxiomはない。
+証明項に現れる bundle と transport の宣言は、本文で証明した
+合同条件、正規化、finite cut、座標変換を Lean の型に実装するものであり、本文にない
+追加の数学的定理を仮定するものではない。
+
+\begin{thebibliography}{9}
+\bibitem{Lam}
+T. Y. Lam,
+\emph{Introduction to Quadratic Forms over Fields},
+Graduate Studies in Mathematics 67, American Mathematical Society, 2005.
+
+\bibitem{Pfister}
+A. Pfister,
+\emph{Quadratic Forms with Applications to Algebraic Geometry and Topology},
+London Mathematical Society Lecture Note Series 217,
+Cambridge University Press, 1995.
+\end{thebibliography}
+
+\end{document}
