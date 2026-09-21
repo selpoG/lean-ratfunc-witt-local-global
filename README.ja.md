@@ -40,7 +40,7 @@ target universe を変える版は、extension の量化が空虚になること
 
 ## Buildと監査
 
-Lean 4.33.0 と Mathlib v4.33.0 を使用します。
+Lean 4.34.0 と Mathlib v4.34.0 を使用します。
 
 ```bash
 lake exe cache get

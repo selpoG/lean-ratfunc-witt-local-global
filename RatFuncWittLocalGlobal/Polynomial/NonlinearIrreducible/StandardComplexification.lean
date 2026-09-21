@@ -65,7 +65,7 @@ theorem quadraticExtension_algEquiv_standardComplexification
   have hq : Irreducible q := by
     simpa [q, standardComplexificationPolynomial] using irreducible_X_sq_add_one (R := R)
   have hqdeg : q.natDegree = 2 := by
-    simpa [q, standardComplexificationPolynomial] using
+    simpa only [q, standardComplexificationPolynomial] using
       (Polynomial.natDegree_X_pow_add_C (R := R) (n := 2) (r := (1 : R)))
   let I : Ideal (Polynomial R) := standardComplexificationIdeal R
   have hI : I.IsMaximal := by
