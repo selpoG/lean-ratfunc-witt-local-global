@@ -155,7 +155,7 @@ theorem eval₂_pos_of_irreducible_monic_natDegree_two
   simp only [eval₂_add, eval₂_mul, eval₂_pow, eval₂_X, eval₂_C]
   have hsquare : 0 ≤ (x + φ (π.coeff 1 / 2)) ^ 2 := sq_nonneg _
   have hmapTwo : φ (π.coeff 1 / 2) = φ (π.coeff 1) / 2 := by
-    rw [map_div₀, map_ofNat]
+    rw [map_div₀, map_ofNat φ 2]
   have hmapConst :
       φ (π.coeff 0 - (π.coeff 1 / 2) ^ 2) =
         φ (π.coeff 0) - (φ (π.coeff 1) / 2) ^ 2 := by

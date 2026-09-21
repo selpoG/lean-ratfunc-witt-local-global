@@ -183,7 +183,7 @@ theorem irreducible_X_sq_add_one
   refine Polynomial.irreducible_of_degree_le_three_of_not_isRoot ?_ ?_
   · have hdeg :
         (Polynomial.X ^ 2 + Polynomial.C (1 : R) : Polynomial R).natDegree = 2 := by
-      simpa using (Polynomial.natDegree_X_pow_add_C (R := R) (n := 2) (r := (1 : R)))
+      exact (Polynomial.natDegree_X_pow_add_C (R := R) (n := 2) (r := (1 : R)))
     rw [Finset.mem_Icc, hdeg]
     norm_num
   · intro x hx
@@ -260,7 +260,7 @@ theorem standardComplexification_exists_algebraMap_add_mul_I
           (R := R) (n := 2) (by norm_num) 1
       have hqdeg : q.natDegree = 2 := by
         dsimp [q, standardComplexificationPolynomial]
-        simpa using
+        exact
           (Polynomial.natDegree_X_pow_add_C (R := R) (n := 2) (r := (1 : R)))
       have hrdeg : r.natDegree < 2 := by
         calc
@@ -339,7 +339,7 @@ theorem standardComplexification_algebraMap_add_mul_I_eq_zero_iff
         compute_degree!
       have hq : q.natDegree = 2 := by
         dsimp [q, standardComplexificationPolynomial]
-        simpa using
+        exact
           (Polynomial.natDegree_X_pow_add_C (R := R) (n := 2) (r := (1 : R)))
       calc
         p.natDegree < 2 := hp

@@ -59,7 +59,8 @@ theorem odd_quotient_data_of_dvd_add_one
     calc
       g.natDegree = (g + 1).natDegree := by
         symm
-        simpa using (Polynomial.natDegree_add_C (p := g) (a := (1 : F)))
+        simpa only [Polynomial.C_1] using
+          (Polynomial.natDegree_add_C (p := g) (a := (1 : F)))
       _ = (f * k).natDegree := by rw [hk]
       _ = f.natDegree + k.natDegree := Polynomial.natDegree_mul hfg0 hk0
   have hgbound : g.natDegree < 2 * f.natDegree :=

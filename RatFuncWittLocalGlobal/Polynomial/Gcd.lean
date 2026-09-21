@@ -175,7 +175,7 @@ private theorem factorization_prod_pow_of_prime_support
           · subst p
             simp
           · have h' : a ≠ p := fun e => h e.symm
-            simp only [Multiset.count_singleton, Finsupp.single_apply, if_neg h, if_neg h']
+            simp only [Multiset.count_singleton, Finsupp.single_apply, ite_eq_right h, ite_eq_right h']
         rw [Finset.prod_insert ha, factorization_mul (pow_ne_zero _ hpa.ne_zero) hprod,
           factorization_pow, hfa_fac, ih (fun p hp => hs (Finset.mem_insert_of_mem hp))]
         rw [Finset.sum_insert ha]

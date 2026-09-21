@@ -34,7 +34,7 @@ target universe を無条件に変えると、対象 extension が存在せず�
 
 ## 検証手順
 
-Lean toolchain は Lean 4.33.0、Mathlib は v4.33.0 に固定します。commit 前には
+Lean toolchain は Lean 4.34.0、Mathlib は v4.34.0 に固定します。commit 前には
 少なくとも次を実行します。
 
 ```bash

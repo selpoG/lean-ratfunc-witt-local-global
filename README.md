@@ -45,7 +45,7 @@ field do not satisfy the same statement in general.
 
 ## Build and verification
 
-The project uses Lean 4.33.0 and Mathlib v4.33.0 through Lake.
+The project uses Lean 4.34.0 and Mathlib v4.34.0 through Lake.
 
 ```bash
 lake exe cache get
