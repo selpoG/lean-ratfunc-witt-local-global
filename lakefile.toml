@@ -1,5 +1,5 @@
 name = "lean-ratfunc-witt-local-global"
-version = "0.1.0"
+version = "0.1.1"
 keywords = ["math", "lean", "quadratic-forms", "local-global", "rational-functions"]
 defaultTargets = ["RatFuncWittLocalGlobal"]
 fixedToolchain = true
