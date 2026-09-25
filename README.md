@@ -145,5 +145,9 @@ proof modules are not part of the compatibility promise.
 
 ## License and citation
 
-The project is released under the [Apache License 2.0](LICENSE). Citation
-metadata is provided in [CITATION.cff](CITATION.cff).
+Author: **Mocho Go** ([selpoG](https://github.com/selpoG)).
+
+Please cite the software using [CITATION.cff](CITATION.cff), and identify the
+release or commit you used so that the cited formalization is reproducible.
+
+Released under the [Apache License 2.0](LICENSE).

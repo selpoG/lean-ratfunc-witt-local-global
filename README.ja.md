@@ -129,5 +129,9 @@ Legendre/quaternion argumentから得ます。一般次元部分は、特殊な�
 
 ## ライセンスと引用
 
-[Apache License 2.0](LICENSE) で公開します。引用情報は
-[CITATION.cff](CITATION.cff) にあります。
+著者: **Mocho Go**（[selpoG](https://github.com/selpoG)）。
+
+ソフトウェアとしての引用情報は [CITATION.cff](CITATION.cff) に記載しています。
+引用した形式化を再現できるよう、使用したリリースまたは commit を明記してください。
+
+[Apache License 2.0](LICENSE) の下で公開しています。
