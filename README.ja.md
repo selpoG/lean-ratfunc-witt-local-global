@@ -130,6 +130,7 @@ Legendre/quaternion argumentから得ます。一般次元部分は、特殊な�
 ## ライセンスと引用
 
 著者: **Mocho Go**（[selpoG](https://github.com/selpoG)）。
+[ORCID: 0009-0000-8123-9408](https://orcid.org/0009-0000-8123-9408).
 
 ソフトウェアとしての引用情報は [CITATION.cff](CITATION.cff) に記載しています。
 引用した形式化を再現できるよう、使用したリリースまたは commit を明記してください。
