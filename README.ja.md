@@ -2,6 +2,8 @@
 
 [English](README.md)
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22974392.svg)](https://doi.org/10.5281/zenodo.22974392)
+
 このリポジトリは、実閉体 `R` 上の一変数有理関数体 `RatFunc R` に対する、
 有限次元二次形式の Witt 型 local-global principle を Lean 4 で形式化します。
 
@@ -134,5 +136,9 @@ Legendre/quaternion argumentから得ます。一般次元部分は、特殊な�
 
 ソフトウェアとしての引用情報は [CITATION.cff](CITATION.cff) に記載しています。
 引用した形式化を再現できるよう、使用したリリースまたは commit を明記してください。
+
+保存済みの **v0.1.1** は
+[10.5281/zenodo.22974393](https://doi.org/10.5281/zenodo.22974393) から参照できます。
+冒頭の DOI バッジは、このソフトウェアの全バージョンをまとめたレコードを指します。
 
 [Apache License 2.0](LICENSE) の下で公開しています。
