@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Run the action
         id: check-for-updates
-        uses: leanprover-community/mathlib-update-action@v1
+        uses: leanprover-community/mathlib-update-action@d2813fb906f1f47c9e3bee0345f199fd404fefdf # v1
         # START CONFIGURATION BLOCK 1
         # END CONFIGURATION BLOCK 1
   do-update: # Runs the upgrade, tests it, and makes a PR/issue/commit.
@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Run the action
         id: update-the-repo
-        uses: leanprover-community/mathlib-update-action/do-update@v1
+        uses: leanprover-community/mathlib-update-action/do-update@d2813fb906f1f47c9e3bee0345f199fd404fefdf # v1
         with:
           tag: ${{ matrix.tag }}
           # START CONFIGURATION BLOCK 2
